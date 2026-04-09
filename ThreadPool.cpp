@@ -13,18 +13,28 @@ ThreadPool::ThreadPool(int threads_num, int event_fd) : stop(0), notify_fd(event
                     for (;;)
                     {
                         Task curr_task(-1, "");
-                        std::unique_lock<std::mutex> lock(queue_mutex);
-                        condition.wait(lock, [this]()
-                                       { return !task_queue.empty() || stop; });
-                        if (task_queue.empty() && stop)
-                            break;
-                        curr_task = task_queue.front();
-                        task_queue.pop();
-                        lock.unlock();
+                        
+                        {
+                            std::unique_lock<std::mutex> lock(queue_mutex);
+
+                            condition.wait(lock, [this]()
+                                           { return !task_queue.empty() || stop; });
+
+                            if (task_queue.empty() && stop)
+                                break;
+
+                            curr_task = task_queue.front();
+                            task_queue.pop();
+                        }
+
                         Result curr_result(curr_task.fd, curr_task.data);
-                        std::unique_lock<std::mutex> result_lock(result_mutex);
-                        result_queue.push(curr_result);
-                        result_lock.unlock();
+                        
+                        {
+                            std::unique_lock<std::mutex> result_lock(result_mutex);
+
+                            result_queue.push(curr_result);
+                        }
+
                         uint64_t one = 1;
                         write(notify_fd, &one, sizeof(one));
                     } }));
@@ -33,9 +43,10 @@ ThreadPool::ThreadPool(int threads_num, int event_fd) : stop(0), notify_fd(event
 
 void ThreadPool::enqueue(Task new_task)
 {
-    std::unique_lock<std::mutex> lock(queue_mutex);
-    task_queue.push(new_task);
-    lock.unlock();
+    {    
+        std::unique_lock<std::mutex> lock(queue_mutex);
+        task_queue.push(new_task);
+    }
 
     condition.notify_one();
 }

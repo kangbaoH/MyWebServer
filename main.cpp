@@ -42,7 +42,7 @@ int main()
     epoll_ctl(epoll_fd, EPOLL_CTL_ADD, listen_fd, &temp_event);
     std::vector<epoll_event> events(MAX_EVENT_NUM);
 
-    std::cout << "Server is listening..." << std::endl;
+    std::cout << "Server is listening on Port 8080..." << std::endl;
 
     // ThreadPool
     int notify_fd = eventfd(0, EFD_NONBLOCK);
@@ -61,8 +61,8 @@ int main()
         {
             int curr_fd = events[i].data.fd;
 
-            if (curr_fd == listen_fd)
-            {
+            if (curr_fd == listen_fd)   // accept new connection                     
+            {   
                 epoll_event new_connection_event;
 
                 struct sockaddr_in client_addr;
@@ -73,37 +73,39 @@ int main()
                 fcntl(conn_fd, F_SETFL, flag | O_NONBLOCK);
 
                 new_connection_event.data.fd = conn_fd;
-                new_connection_event.events = EPOLLIN;
+                new_connection_event.events = EPOLLIN | EPOLLONESHOT;
 
                 epoll_ctl(epoll_fd, EPOLL_CTL_ADD, conn_fd, &new_connection_event);
                 
                 std::cout << "new client connected!" << std::endl;
             }
-            else if (curr_fd == notify_fd)
+            else if (curr_fd == notify_fd)  // get processed result and send to client
             {
                 uint64_t result_num;
                 read(curr_fd, &result_num, sizeof(result_num));
 
                 for (uint64_t i = 0; i < result_num; i += 1)
                 {
-                    std::unique_lock<std::mutex> lock(pool.result_mutex);
+                    Result result(-1, "");
                     
-                    if(pool.result_queue.empty())
                     {
-                        lock.unlock();
-                        break;
+                        std::unique_lock<std::mutex> lock(pool.result_mutex);
+                        if(pool.result_queue.empty())
+                            break;
+                        result = pool.result_queue.front();
+                        pool.result_queue.pop();
                     }
 
-                    Result result = pool.result_queue.front();
-                    pool.result_queue.pop();
-                    lock.unlock();
                     send(result.fd, result.data.data(), result.data.length(), 0);
-
-                    epoll_ctl(epoll_fd, EPOLL_CTL_DEL, result.fd, NULL);
-                    close(result.fd);
+                    
+                    // persistent connection
+                    epoll_event rearm_conn_event;
+                    rearm_conn_event.events = EPOLLIN | EPOLLONESHOT;
+                    rearm_conn_event.data.fd = result.fd;
+                    epoll_ctl(epoll_fd, EPOLL_CTL_MOD, result.fd, &rearm_conn_event);
                 }
             }
-            else if (events[i].events & EPOLLIN)
+            else if (events[i].events & EPOLLIN)    // read data and hand to worker thread
             {
                 char buffer[64] = {0};
                 ssize_t buf_stat = read(curr_fd, (void *)buffer, sizeof(buffer) - 1);
