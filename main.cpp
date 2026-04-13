@@ -121,7 +121,7 @@ int main()
                 if (buf_stat > 0)
                 {
                     connections[curr_event.data.fd].write2read_buffer(buffer);
-                    std::cout << "receive: " << buffer;
+                    std::cout << "receive: \n" << buffer;
 
                     pool.enqueue(&connections[events[i].data.fd]);
                 }

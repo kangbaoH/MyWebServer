@@ -18,7 +18,7 @@ public:
 
     int get_fd();
 
-    char *get_write_buffer_data();
+    const char *get_write_buffer_data();
 
     size_t get_write_buffer_len();
 
