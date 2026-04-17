@@ -5,24 +5,24 @@
 class Connection
 {
 private:
-    int fd;
+    int fd_;
     std::string read_buffer;
     std::string write_buffer;
 
 public:
-    Connection() : fd(-1) {}
+    Connection() : fd_(-1) {}
 
-    Connection(int client_fd) : fd(client_fd) {}
+    Connection(int client_fd) : fd_(client_fd) {}
 
     void init(int client_fd);
 
-    int get_fd();
+    int fd();
 
-    const char *get_write_buffer_data();
+    const char *write_buffer_data();
 
-    size_t get_write_buffer_len();
+    size_t write_buffer_len();
 
-    void write2read_buffer(char *buffer);
+    void append_to_read_buffer(char *buffer, size_t len);
 
     void process();
 

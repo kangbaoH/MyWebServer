@@ -8,6 +8,7 @@
 #include <vector>
 #include <sys/eventfd.h>
 #include <unistd.h>
+#include <iostream>
 #include "../Connection/Connection.h"
 
 struct ThreadPool

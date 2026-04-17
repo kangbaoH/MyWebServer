@@ -2,27 +2,27 @@
 
 void Connection::init(int client_fd)
 {
-    fd = client_fd;
+    fd_ = client_fd;
 }
 
-int Connection::get_fd()
+int Connection::fd()
 {
-    return fd;
+    return fd_;
 }
 
-const char *Connection::get_write_buffer_data()
+const char *Connection::write_buffer_data()
 {
     return write_buffer.data();
 }
 
-size_t Connection::get_write_buffer_len()
+size_t Connection::write_buffer_len()
 {
     return write_buffer.length();
 }
 
-void Connection::write2read_buffer(char *buffer)
+void Connection::append_to_read_buffer(char *buffer, size_t len)
 {
-    read_buffer.append(buffer);
+    read_buffer.append(buffer, len);
 }
 
 void Connection::process()
@@ -46,6 +46,7 @@ void Connection::process()
 
         read_buffer.clear();
     }
+
 }
 
 void Connection::clear_write_buffer()

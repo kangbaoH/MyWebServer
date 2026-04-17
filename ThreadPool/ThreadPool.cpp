@@ -23,10 +23,8 @@ ThreadPool::ThreadPool(int threads_num, int event_fd) : stop(0), notify_fd(event
                             task_queue.pop();
                         }
 
-                        /****************/
-                        /* process data */
+                        // process data 
                         curr_task->process();
-                        /****************/
 
                         {
                             std::unique_lock<std::mutex> result_lock(result_mutex);
@@ -35,7 +33,13 @@ ThreadPool::ThreadPool(int threads_num, int event_fd) : stop(0), notify_fd(event
                         }
 
                         uint64_t one = 1;
-                        write(notify_fd, &one, sizeof(one));
+                        if ((write(notify_fd, &one, sizeof(one))) == -1)
+                        {
+                            if (errno != EAGAIN && errno != EWOULDBLOCK)
+                            {    
+                                std::cout << "Failed to write on notify_fd!" << std::endl;
+                            }
+                        }
                     } }));
     }
 }

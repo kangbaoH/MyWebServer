@@ -30,18 +30,18 @@ int main()
     bind(listen_fd, (sockaddr *)&server_addr, sizeof(server_addr));
 
     // listen
-    listen(listen_fd, 10);
+    listen(listen_fd, 1024);
 
     //set to non-blocking
-    int flag = fcntl(listen_fd, F_GETFL, 0);
-    fcntl(listen_fd, F_SETFL, flag | O_NONBLOCK);
+    int old_flag = fcntl(listen_fd, F_GETFL, 0);
+    fcntl(listen_fd, F_SETFL, old_flag | O_NONBLOCK);
 
     //add to epoll
         //create an epoll event
-    epoll_event temp_event;
-    temp_event.data.fd = listen_fd;
-    temp_event.events = EPOLLIN;
-    epoll_ctl(epoll_fd, EPOLL_CTL_ADD, listen_fd, &temp_event);
+    epoll_event listen_event;
+    listen_event.data.fd = listen_fd;
+    listen_event.events = EPOLLIN | EPOLLET;
+    epoll_ctl(epoll_fd, EPOLL_CTL_ADD, listen_fd, &listen_event);
     std::vector<epoll_event> events(MAX_EVENT_NUM);
 
     std::cout << "Server is listening on Port 8080..." << std::endl;
@@ -65,28 +65,54 @@ int main()
 
             if (curr_event.data.fd == listen_fd)   // accept new connection                     
             {   
-                epoll_event new_conn_event;
+                epoll_event conn_event;
 
                 struct sockaddr_in client_addr;
                 socklen_t client_len = sizeof(client_addr);
-                int conn_fd = accept(listen_fd, (sockaddr *)&client_addr, &client_len);
 
-                int flag = fcntl(conn_fd, F_GETFL, 0);
-                fcntl(conn_fd, F_SETFL, flag | O_NONBLOCK);
+                for (;;)
+                {
+                    int conn_fd = accept(listen_fd, (sockaddr *)&client_addr, &client_len);
 
-                new_conn_event.data.fd = conn_fd;
-                new_conn_event.events = EPOLLIN | EPOLLONESHOT;
+                    if (conn_fd != -1)
+                    {
+                        int old_flag = fcntl(conn_fd, F_GETFL, 0);
+                        fcntl(conn_fd, F_SETFL, old_flag | O_NONBLOCK);
 
-                epoll_ctl(epoll_fd, EPOLL_CTL_ADD, conn_fd, &new_conn_event);
+                        conn_event.data.fd = conn_fd;
+                        conn_event.events = EPOLLIN | EPOLLONESHOT | EPOLLET;
 
-                connections[conn_fd].init(conn_fd);
+                        epoll_ctl(epoll_fd, EPOLL_CTL_ADD, conn_fd, &conn_event);
 
-                std::cout << "new client connected!" << std::endl;
+                        connections[conn_fd].init(conn_fd);
+
+                        std::cout << "new client connected!" << std::endl;
+                    }
+                    else if (conn_fd == -1)
+                    {                 
+                        if (errno == EAGAIN || errno == EWOULDBLOCK)
+                        {
+                            break;
+                        }
+                        else
+                        {
+                            std::cout << "client connected error!" << std::endl;
+                            break;
+                        }
+                    }
+                }
             }
             else if (curr_event.data.fd == notify_fd)  // get processed result
             {                                          // and send to client
                 uint64_t result_num;
-                read(curr_event.data.fd, &result_num, sizeof(result_num));
+                if ((read(curr_event.data.fd, &result_num, sizeof(result_num))) == -1)
+                {
+                    if (errno != EAGAIN || errno != EWOULDBLOCK)
+                    {    
+                        std::cout << "Failed to get processed data!" << std::endl;
+                        result_num = 0;
+                    }
+                }
 
                 for (uint64_t i = 0; i < result_num; i += 1)
                 {
@@ -99,46 +125,55 @@ int main()
                         pool.result_queue.pop();
                     }
 
-                    send(result_connection->get_fd(),
-                         result_connection->get_write_buffer_data(),
-                         result_connection->get_write_buffer_len(), 0);
+                    send(result_connection->fd(),
+                         result_connection->write_buffer_data(),
+                         result_connection->write_buffer_len(), 0);
 
                     result_connection->clear_write_buffer();
 
                     // persistent connection
                     epoll_event rearm_conn_event;
-                    rearm_conn_event.events = EPOLLIN | EPOLLONESHOT;
-                    rearm_conn_event.data.fd = result_connection->get_fd();
-                    epoll_ctl(epoll_fd, EPOLL_CTL_MOD, result_connection->get_fd(),
+                    rearm_conn_event.events = EPOLLIN | EPOLLONESHOT | EPOLLET;
+                    rearm_conn_event.data.fd = result_connection->fd();
+                    epoll_ctl(epoll_fd, EPOLL_CTL_MOD, result_connection->fd(),
                               &rearm_conn_event);
                 }
             }
             else if (curr_event.events & EPOLLIN)    // read data and hand to worker thread
             {
-                char buffer[1024] = {0};
-                ssize_t buf_stat = read(curr_event.data.fd, (void *)buffer, sizeof(buffer) - 1);
+                char buffer[1024];
 
-                if (buf_stat > 0)
+                ssize_t read_bytes;
+                for (;;)
                 {
-                    connections[curr_event.data.fd].write2read_buffer(buffer);
-                    std::cout << "receive: \n" << buffer;
+                    read_bytes = read(curr_event.data.fd, (void *)buffer, sizeof(buffer) - 1);
 
-                    pool.enqueue(&connections[events[i].data.fd]);
-                }
-                else if (buf_stat == 0)
-                {
-                    // 资源释放待添加
-                    epoll_ctl(epoll_fd, EPOLL_CTL_DEL, curr_event.data.fd, NULL);
-                    close(curr_event.data.fd);
-                    std::cout << "Connection closed by foreign host." << std::endl;
-                }
-                else
-                {
-                    if (errno != EAGAIN &&errno != EWOULDBLOCK)
+                    if (read_bytes > 0)
                     {
-                        std::cout << "read error" << std::endl;
+                        connections[curr_event.data.fd].append_to_read_buffer(buffer, read_bytes);
+                    }
+                    else if (read_bytes == 0)
+                    {
+                        // 资源释放待添加
                         epoll_ctl(epoll_fd, EPOLL_CTL_DEL, curr_event.data.fd, NULL);
                         close(curr_event.data.fd);
+                        std::cout << "Connection closed by foreign host." << std::endl;
+                        break;
+                    }
+                    else if (read_bytes < 0)
+                    {
+                        if (errno == EAGAIN || errno == EWOULDBLOCK)
+                        {
+                            pool.enqueue(&connections[curr_event.data.fd]);
+                            break;
+                        }
+                        else
+                        {
+                            std::cout << "read error" << std::endl;
+                            epoll_ctl(epoll_fd, EPOLL_CTL_DEL, curr_event.data.fd, NULL);
+                            close(curr_event.data.fd);
+                            break;
+                        }
                     }
                 }
             }
