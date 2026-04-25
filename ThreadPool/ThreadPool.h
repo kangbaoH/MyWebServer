@@ -11,12 +11,20 @@
 #include <iostream>
 #include "../Connection/Connection.h"
 
-struct ThreadPool
+struct Task
 {
+    Connection *connection;
+    int version;
 
+    Task(Connection *conn, int ver);
+};
+
+class ThreadPool
+{
+public:
     std::vector<std::thread> workers;
     std::condition_variable condition;
-    std::queue<Connection*> task_queue;
+    std::queue<Task> task_queue;
     std::queue<Connection*> result_queue;
     std::mutex queue_mutex;
     std::mutex result_mutex;
@@ -24,6 +32,6 @@ struct ThreadPool
     bool stop;
     
     ThreadPool(int threads_num, int event_fd);
-    void enqueue(Connection* new_task);
+    void enqueue(Task new_task);
     ~ThreadPool();
 };

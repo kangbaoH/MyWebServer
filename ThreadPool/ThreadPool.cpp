@@ -1,5 +1,7 @@
 #include "ThreadPool.h"
 
+Task::Task(Connection *conn, int ver) : connection(conn), version(ver) {}
+
 ThreadPool::ThreadPool(int threads_num, int event_fd) : stop(0), notify_fd(event_fd)
 {
     for (int i = 0; i < threads_num; i += 1)
@@ -8,7 +10,7 @@ ThreadPool::ThreadPool(int threads_num, int event_fd) : stop(0), notify_fd(event
                                       {                    
                     for (;;)
                     {
-                        Connection *curr_task;
+                        Task curr_task(nullptr, 0);
 
                         {
                             std::unique_lock<std::mutex> lock(queue_mutex);
@@ -23,13 +25,30 @@ ThreadPool::ThreadPool(int threads_num, int event_fd) : stop(0), notify_fd(event
                             task_queue.pop();
                         }
 
-                        // process data 
-                        curr_task->process();
+                        if (curr_task.connection->version() != curr_task.version)
+                        {
+                            continue;
+                        }
+
+                        // process data
+                        HttpCode http_code = curr_task.connection->process_read();
+                        if (http_code == HttpCode::NO_REQUEST)
+                        {
+                            curr_task.connection->set_connection_state(ConnectionState::READ);
+                        }
+                        else if (http_code == HttpCode::FILE_REQUEST)
+                        {
+                            curr_task.connection->set_connection_state(ConnectionState::WRITE);
+                        }
+                        else
+                        {
+                            curr_task.connection->set_connection_state(ConnectionState::CLOSE);
+                        }
 
                         {
                             std::unique_lock<std::mutex> result_lock(result_mutex);
 
-                            result_queue.push(curr_task);
+                            result_queue.push(curr_task.connection);
                         }
 
                         uint64_t one = 1;
@@ -44,7 +63,7 @@ ThreadPool::ThreadPool(int threads_num, int event_fd) : stop(0), notify_fd(event
     }
 }
 
-void ThreadPool::enqueue(Connection* new_task)
+void ThreadPool::enqueue(Task new_task)
 {
     {    
         std::unique_lock<std::mutex> lock(queue_mutex);

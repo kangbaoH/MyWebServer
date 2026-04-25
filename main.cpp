@@ -86,7 +86,8 @@ int main()
 
                         connections[conn_fd].init(conn_fd);
 
-                        std::cout << "new client connected!" << std::endl;
+                        std::cout << "new client connected! client fd: " << 
+                            conn_fd << std::endl;
                     }
                     else if (conn_fd == -1)
                     {                 
@@ -107,7 +108,7 @@ int main()
                 uint64_t result_num;
                 if ((read(curr_event.data.fd, &result_num, sizeof(result_num))) == -1)
                 {
-                    if (errno != EAGAIN || errno != EWOULDBLOCK)
+                    if (errno != EAGAIN && errno != EWOULDBLOCK)
                     {    
                         std::cout << "Failed to get processed data!" << std::endl;
                         result_num = 0;
@@ -125,18 +126,85 @@ int main()
                         pool.result_queue.pop();
                     }
 
-                    send(result_connection->fd(),
-                         result_connection->write_buffer_data(),
-                         result_connection->write_buffer_len(), 0);
+                    if (result_connection->state() == ConnectionState::READ)
+                    {
+                        epoll_event rearm_conn_event;
+                        rearm_conn_event.events = EPOLLIN | EPOLLONESHOT | EPOLLET;
+                        rearm_conn_event.data.fd = result_connection->fd();
+                        epoll_ctl(epoll_fd, EPOLL_CTL_MOD, result_connection->fd(),
+                                  &rearm_conn_event);
+                    }
+                    else if(result_connection->state() == ConnectionState::WRITE)
+                    {
+                        WriteState write_state = result_connection->process_write();
+                        if (write_state == WriteState::WRITE_DONE)
+                        {
+                            if (result_connection->read_buffer_len())
+                            {                                       //防止粘包
+                                pool.enqueue(Task(result_connection,
+                                                  result_connection->version()));
+                            }
+                            else
+                            {
+                                epoll_event rearm_conn_event;
+                                rearm_conn_event.events = EPOLLIN | EPOLLONESHOT | EPOLLET;
+                                rearm_conn_event.data.fd = result_connection->fd();
+                                epoll_ctl(epoll_fd, EPOLL_CTL_MOD, result_connection->fd(),
+                                          &rearm_conn_event);
+                            }
+                        }
+                        else if (write_state == WriteState::WRITE_AGAIN)
+                        {
+                            epoll_event write_again_event;
+                            write_again_event.data.fd = result_connection->fd();
+                            write_again_event.events = EPOLLOUT | EPOLLET;
+                            epoll_ctl(epoll_fd, EPOLL_CTL_MOD,
+                                      result_connection->fd(), &write_again_event);
+                        }
+                        else
+                        {
+                            epoll_ctl(epoll_fd, EPOLL_CTL_DEL,
+                                      result_connection->fd(), NULL);
+                            close(result_connection->fd());
+                            std::cout << "close. client fd: " << result_connection->fd() << 
+                                std::endl;
+                        }
+                    }
+                    else if(result_connection->state() == ConnectionState::CLOSE)
+                    {
+                        epoll_ctl(epoll_fd, EPOLL_CTL_DEL,
+                                  result_connection->fd(), NULL);
+                        close(result_connection->fd());
+                        std::cout << "Request error, close connection. fd: " << 
+                            result_connection->fd() << std::endl;
+                    }
+                }
+            }
+            else if (curr_event.events & EPOLLOUT)
+            {
+                WriteState write_state = connections[curr_event.data.fd].process_write();
 
-                    result_connection->clear_write_buffer();
-
-                    // persistent connection
-                    epoll_event rearm_conn_event;
-                    rearm_conn_event.events = EPOLLIN | EPOLLONESHOT | EPOLLET;
-                    rearm_conn_event.data.fd = result_connection->fd();
-                    epoll_ctl(epoll_fd, EPOLL_CTL_MOD, result_connection->fd(),
-                              &rearm_conn_event);
+                if (write_state == WriteState::WRITE_DONE)
+                {
+                    if(connections[curr_event.data.fd].read_buffer_len())
+                    {
+                        pool.enqueue(Task(&connections[curr_event.data.fd],
+                                          connections[curr_event.data.fd].version()));
+                    }
+                    else                        
+                    {
+                        epoll_event rearm_conn_event;
+                        rearm_conn_event.events = EPOLLIN | EPOLLONESHOT | EPOLLET;
+                        rearm_conn_event.data.fd = curr_event.data.fd;
+                        epoll_ctl(epoll_fd, EPOLL_CTL_MOD, curr_event.data.fd,
+                                  &rearm_conn_event);
+                    }
+                }
+                else if (write_state == WriteState::WRITE_CLOSE || 
+                    write_state == WriteState::WRITE_ERROR)
+                {
+                    epoll_ctl(epoll_fd, EPOLL_CTL_DEL, curr_event.data.fd, NULL);
+                    close(curr_event.data.fd);
                 }
             }
             else if (curr_event.events & EPOLLIN)    // read data and hand to worker thread
@@ -154,22 +222,32 @@ int main()
                     }
                     else if (read_bytes == 0)
                     {
-                        // 资源释放待添加
                         epoll_ctl(epoll_fd, EPOLL_CTL_DEL, curr_event.data.fd, NULL);
                         close(curr_event.data.fd);
-                        std::cout << "Connection closed by foreign host." << std::endl;
+                        std::cout << "Connection closed by peer. client fd: " << 
+                            curr_event.data.fd << std::endl;
                         break;
                     }
                     else if (read_bytes < 0)
                     {
                         if (errno == EAGAIN || errno == EWOULDBLOCK)
                         {
-                            pool.enqueue(&connections[curr_event.data.fd]);
+                            pool.enqueue(Task(&connections[curr_event.data.fd],
+                                              connections[curr_event.data.fd].version()));
+                            break;
+                        }
+                        else if (errno == ECONNRESET)
+                        {
+                            epoll_ctl(epoll_fd, EPOLL_CTL_DEL, curr_event.data.fd, NULL);
+                            close(curr_event.data.fd);
+                            std::cout << "Connection closed by peer. client fd: " << 
+                                curr_event.data.fd << std::endl;
                             break;
                         }
                         else
                         {
-                            std::cout << "read error" << std::endl;
+                            std::cout << "read error  client fd: " <<
+                                curr_event.data.fd << std::endl;
                             epoll_ctl(epoll_fd, EPOLL_CTL_DEL, curr_event.data.fd, NULL);
                             close(curr_event.data.fd);
                             break;

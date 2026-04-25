@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Server - Running</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent: #38bdf8;
+            --success: #22c55e;
+            --card-bg: #1e293b;
+        }
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        .container {
+            max-width: 900px;
+            padding: 2rem;
+            text-align: center;
+        }
+        h1 {
+            font-size: 3.5rem;
+            margin-bottom: 0.5rem;
+            letter-spacing: -1px;
+            background: linear-gradient(to right, var(--accent), #818cf8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            background: rgba(34, 197, 94, 0.1);
+            color: var(--success);
+            padding: 0.5rem 1.2rem;
+            border-radius: 9999px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-bottom: 1.5rem;
+            border: 1px solid rgba(34, 197, 94, 0.2);
+        }
+        .pulse {
+            width: 10px;
+            height: 10px;
+            background-color: var(--success);
+            border-radius: 50%;
+            margin-right: 10px;
+            box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+            animation: pulsing 2s infinite;
+        }
+        @keyframes pulsing {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+        }
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 1.2rem;
+            margin-bottom: 3rem;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+        }
+        .card {
+            background-color: var(--card-bg);
+            padding: 2rem 1.5rem;
+            border-radius: 16px;
+            border: 1px solid #334155;
+            text-align: left;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+            border-color: #475569;
+        }
+        .card h3 { 
+            margin-top: 0; 
+            color: var(--accent); 
+            font-size: 1.3rem;
+            margin-bottom: 0.8rem;
+        }
+        .card p { 
+            color: var(--text-muted); 
+            font-size: 0.95rem; 
+            line-height: 1.6; 
+            margin: 0;
+        }
+        footer {
+            margin-top: 5rem;
+            color: #475569;
+            font-size: 0.875rem;
+            letter-spacing: 1px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="status-badge">
+            <div class="pulse"></div>
+            Server Online
+        </div>
+        
+        <h1>Core Node v2.0</h1>
+        <div class="subtitle">Welcome. The custom web server is running smoothly.</div>
+        
+        <div class="grid">
+            <div class="card">
+                <h3>I/O Multiplexing</h3>
+                <p>基于 Epoll 事件循环核心，无阻塞处理海量并发连接，从容应对流量洪峰。</p>
+            </div>
+            <div class="card">
+                <h3>Thread Pool</h3>
+                <p>采用 Multi-threaded Reactor 模型，合理分配任务，将多核 CPU 性能榨干到极致。</p>
+            </div>
+            <div class="card">
+                <h3>Low Latency</h3>
+                <p>纯原生 C++ 强力驱动，拒绝中间层开销，提供毫秒级的极致请求响应速度。</p>
+            </div>
+        </div>
+    </div>
+    
+    <footer>
+        &copy; 2026 High-Performance C++ Architecture. All Systems Operational.
+    </footer>
+</body>
+</html>
