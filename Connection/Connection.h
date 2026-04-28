@@ -50,6 +50,13 @@ enum class WriteState
     WRITE_ERROR
 };
 
+class Substr
+{
+public:
+    size_t pos;
+    size_t len;
+};
+
 #define RESOURCE_PATH_MAXLEN 200
 
 class Connection
@@ -64,14 +71,14 @@ private:
     int check_index;
     int start_index;
 
-    char *m_method;
-    char *m_url;
-    char *m_version;
+    Substr m_method;
+    Substr m_url;
+    Substr m_version;
 
     bool m_linger;
     int m_content_length;
 
-    char *m_content;
+    Substr m_content;
 
     char resource_path[RESOURCE_PATH_MAXLEN];
     struct stat file_stat;

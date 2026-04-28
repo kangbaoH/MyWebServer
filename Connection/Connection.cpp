@@ -13,8 +13,9 @@ void Connection::init(int client_fd)
     check_index = 0;
     start_index = 0;
 
-    m_linger = false;
+    m_linger = true;
 
+    memset(resource_path, '\0', RESOURCE_PATH_MAXLEN);
     strcpy(resource_path, "/home/verta/MyServer/Resources");
 
     version_ += 1;
@@ -36,11 +37,11 @@ LineState Connection::parse_line()
         if (read_buffer[check_index] == '\r')
         {
             if (check_index + 1 < read_buffer.length())
-            {    
+            {
                 if (read_buffer[check_index + 1] == '\n')
                 {
                     read_buffer[check_index++] = '\0';
-                    read_buffer[check_index++] = '\0';                   
+                    read_buffer[check_index++] = '\0';
                     return LineState::LINE_OK;
                 }
                 else
@@ -59,39 +60,47 @@ LineState Connection::parse_line()
 
 HttpCode Connection::parse_request_line(char *text)
 {
-    while (*text == ' ' || *text == '\t')
-    {
-        text++;
-    }
     char *space_ptr = text;
+    char *start_ptr;
 
-    m_method = space_ptr;
+    // get method
+    while (*space_ptr == ' ' || *space_ptr == '\t')
+    {
+        space_ptr++;
+    }
+    start_ptr = space_ptr;
     space_ptr = strpbrk(space_ptr, " \t");
     if (!space_ptr)
     {
         return HttpCode::BAD_REQUEST;
     }
-    *space_ptr++ = '\0';
+    m_method.pos = start_ptr - &read_buffer[0];
+    m_method.len = space_ptr - start_ptr;
+
+    // get url
     while (*space_ptr == ' ' || *space_ptr == '\t')
-    {    
+    {
         space_ptr++;
     }
-
-    m_url = space_ptr;
+    start_ptr = space_ptr;
     space_ptr = strpbrk(space_ptr, " \t");
     if (!space_ptr)
     {
         return HttpCode::BAD_REQUEST;
     }
-    *space_ptr++ = '\0';
+    m_url.pos = start_ptr - &read_buffer[0];
+    m_url.len = space_ptr - start_ptr;
+
+    // get version
     while (*space_ptr == ' ' || *space_ptr == '\t')
     {
         space_ptr++;
     }
+    start_ptr = space_ptr;
+    space_ptr = strpbrk(space_ptr, "\r");
+    m_version.pos = start_ptr - &read_buffer[0];
+    m_version.len = space_ptr - start_ptr;
 
-    m_version = space_ptr;
-
-    m_check_state = CheckState::HEADERS;
     return HttpCode::NO_REQUEST;
 }
 
@@ -104,12 +113,11 @@ HttpCode Connection::parse_headers(char *text)
 
     if (text[0] == '\0')
     {
-        if (strcmp(m_method, "GET") == 0)
+        if (read_buffer.compare(m_method.pos, m_method.len, "GET") == 0)
         {
-            m_check_state = CheckState::FINISH;
             return HttpCode::GET_REQUEST;
         }
-        else if (strcmp(m_method, "POST") == 0)
+        else if (read_buffer.compare(m_method.pos, m_method.len, "POST") == 0)
         {
             m_check_state = CheckState::BODY;
             return HttpCode::NO_REQUEST;
@@ -138,9 +146,9 @@ HttpCode Connection::parse_headers(char *text)
 
         if (strcasecmp(key_ptr, "Connection") == 0)
         {
-            if (strcasecmp(value_ptr, "keep-alive") == 0)
+            if (strcasecmp(value_ptr, "close") == 0)
             {
-                m_linger = true;
+                m_linger = false;
             }
         }
         else if (strcasecmp(key_ptr, "Content-Length") == 0)
@@ -159,8 +167,9 @@ HttpCode Connection::parse_body(char *text)
         return HttpCode::NO_REQUEST;
     }
 
-    m_content = text;
-    m_check_state = CheckState::FINISH;
+    m_content.pos = text - &read_buffer[0];
+    m_content.len = m_content_length;
+
     return HttpCode::GET_REQUEST;
 }
 
@@ -171,50 +180,55 @@ HttpCode Connection::process_read()
     char *text = nullptr;
 
     while ((m_check_state == CheckState::BODY) ||
-               ((line_state = parse_line()) == LineState::LINE_OK))
+           ((line_state = parse_line()) == LineState::LINE_OK))
     {
         text = get_line();
         start_index = check_index;
 
         switch (m_check_state)
         {
-            case CheckState::REQUEST_LINE:
+        case CheckState::REQUEST_LINE:
+        {
+            if ((ret = parse_request_line(text)) == HttpCode::BAD_REQUEST)
             {
-                if ((ret = parse_request_line(text)) == HttpCode::BAD_REQUEST)
-                {
-                    return ret;
-                }
-                break;
+                return ret;
             }
-            case CheckState::HEADERS:
+            m_check_state = CheckState::HEADERS;
+            break;
+        }
+        case CheckState::HEADERS:
+        {
+            ret = parse_headers(text);
+            if (ret == HttpCode::BAD_REQUEST)
             {
-                if (((ret = parse_headers(text)) == HttpCode::BAD_REQUEST)) 
-                {
-                    return ret;
-                }
-                if (m_check_state == CheckState::FINISH)
-                {
-                    return do_request();
-                }
-                break;
+                return ret;
             }
-            case CheckState::BODY:
+            else if (ret == HttpCode::GET_REQUEST)
             {
-                if (((ret = parse_body(text)) == HttpCode::BAD_REQUEST))
-                {
-                    return ret;
-                }
-                if (m_check_state == CheckState::FINISH)
-                {
-                    return do_request();
-                }
-                line_state = LineState::LINE_OPEN;
-                break;
-            };
-            default:
-            {
-                return HttpCode::INTERNAL_ERROR;
+                m_check_state = CheckState::FINISH;
+                return do_request();
             }
+            break;
+        }
+        case CheckState::BODY:
+        {
+            ret = parse_body(text);
+            if (ret == HttpCode::BAD_REQUEST)
+            {
+                return ret;
+            }
+            else if (ret == HttpCode::GET_REQUEST)
+            {
+                m_check_state = CheckState::FINISH;
+                return do_request();
+            }
+            line_state = LineState::LINE_OPEN;
+            break;
+        };
+        default:
+        {
+            return HttpCode::INTERNAL_ERROR;
+        }
         }
     }
 
@@ -250,15 +264,23 @@ void Connection::make_response()
 HttpCode Connection::do_request()
 {
     size_t len = strlen(resource_path);
-    if (strcmp(m_url, "/") == 0)
+    if (read_buffer.compare(m_url.pos, m_url.len, "/") == 0)
     {
-        strncpy(resource_path + len, "/index.html", RESOURCE_PATH_MAXLEN - len - 1);
+        size_t copy_len = std::min(
+            strlen("/index.html"),
+            static_cast<size_t>(RESOURCE_PATH_MAXLEN - len - 1)
+        );
+        memcpy(resource_path + len, "/index.html", copy_len);
     }
     else
     {
-        strncpy(resource_path + len, m_url, RESOURCE_PATH_MAXLEN - len - 1);
+        size_t copy_len = std::min(
+            m_url.len,
+            static_cast<size_t>(RESOURCE_PATH_MAXLEN - len - 1)
+        );
+        memcpy(resource_path + len, read_buffer.data() + m_url.pos, copy_len);
     }
-    
+
     if (stat(resource_path, &file_stat) < 0)
     {
         return HttpCode::NO_RESOURCE;
@@ -311,7 +333,7 @@ WriteState Connection::process_write()
 
         if (bytes_to_send == 0)
         {
-            if(file_address)
+            if (file_address)
             {
                 munmap(file_address, file_stat.st_size);
                 file_address = nullptr;
