@@ -31,7 +31,7 @@ public:
     int notify_fd;
     bool stop;
     
-    ThreadPool(int threads_num, int event_fd);
+    void init(int threads_num, int event_fd);
     void enqueue(Task new_task);
     ~ThreadPool();
 };

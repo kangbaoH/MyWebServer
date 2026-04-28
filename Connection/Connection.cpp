@@ -250,8 +250,15 @@ void Connection::make_response()
 HttpCode Connection::do_request()
 {
     size_t len = strlen(resource_path);
-    strncpy(resource_path + len, m_url, RESOURCE_PATH_MAXLEN - len - 1);
-
+    if (strcmp(m_url, "/") == 0)
+    {
+        strncpy(resource_path + len, "/index.html", RESOURCE_PATH_MAXLEN - len - 1);
+    }
+    else
+    {
+        strncpy(resource_path + len, m_url, RESOURCE_PATH_MAXLEN - len - 1);
+    }
+    
     if (stat(resource_path, &file_stat) < 0)
     {
         return HttpCode::NO_RESOURCE;

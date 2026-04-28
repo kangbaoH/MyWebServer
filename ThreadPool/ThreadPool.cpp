@@ -2,8 +2,10 @@
 
 Task::Task(Connection *conn, int ver) : connection(conn), version(ver) {}
 
-ThreadPool::ThreadPool(int threads_num, int event_fd) : stop(0), notify_fd(event_fd)
+void ThreadPool::init(int threads_num, int event_fd)
 {
+    stop = 0;
+    notify_fd = event_fd;
     for (int i = 0; i < threads_num; i += 1)
     {
         workers.push_back(std::thread([this]()
@@ -78,5 +80,8 @@ ThreadPool::~ThreadPool()
     stop = 1;
     condition.notify_all();
     for (auto &worker : workers)
+    {
         worker.join();
+    }
+    close(notify_fd);
 }
