@@ -264,6 +264,10 @@ void WebServer::handle_write()
             timer.add(curr_event.data.fd);
         }
     }
+    else if (write_state == WriteState::WRITE_AGAIN)
+    {
+        sign_epoll(curr_event.data.fd, EPOLL_CTL_MOD, EPOLLOUT | EPOLLET);
+    }
     else if (write_state == WriteState::WRITE_CLOSE)
     {
         close_connection(curr_event.data.fd);
