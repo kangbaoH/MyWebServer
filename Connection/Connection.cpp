@@ -107,7 +107,10 @@ HttpCode Connection::parse_request_line(char *text)
         space_ptr++;
     }
     start_ptr = space_ptr;
-    space_ptr = strpbrk(space_ptr, "\0");
+    while (*space_ptr != '\0')
+    {
+        space_ptr++;
+    }
     m_version.pos = start_ptr - &read_buffer[0];
     m_version.len = space_ptr - start_ptr;
 
