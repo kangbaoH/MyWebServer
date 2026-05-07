@@ -13,8 +13,10 @@
 #include "../ThreadPool/ThreadPool.h"
 #include "../Connection/Connection.h"
 #include "../TimerWheel/TimerWheel.h"
+#include "../Logger/Logger.h"
 
 #define MAX_EVENT_NUM 1024
+#define MAX_CWD_LEN 200
 
 class WebServer
 {
@@ -30,6 +32,7 @@ private:
     int listen_fd;
     int notify_fd;
     int timer_fd;
+    Logger logger;
 
     epoll_event curr_event;
 
@@ -38,6 +41,7 @@ public:
     void listen_init(int port);
     void threadpool_init(int thread_nums);
     void timer_init(int timeout);
+    void logger_init(std::string filename, Level level);
 
     void start(int port, int thread_nums, int timeout, int max_connection_num);
 

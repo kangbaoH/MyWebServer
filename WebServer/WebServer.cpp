@@ -31,7 +31,7 @@ void WebServer::listen_init(int port)
     listen_event.events = EPOLLIN | EPOLLET;
     epoll_ctl(epoll_fd, EPOLL_CTL_ADD, listen_fd, &listen_event);
 
-    std::cout << "Server is listening on Port 8080..." << std::endl;
+    logger.log(Level::INFO, "Server is listening on Port 8080...");
 }
 
 void WebServer::threadpool_init(int thread_nums)
@@ -63,8 +63,23 @@ void WebServer::timer_init(int timeout)
     timer.init(timeout, connections.data());
 }
 
+void WebServer::logger_init(std::string filename, Level level)
+{
+    // char cwd[MAX_CWD_LEN];
+    // getcwd(cwd, MAX_CWD_LEN);
+    // filename = "/" + filename;
+    // filename = cwd + filename;
+
+    if (logger.init(filename, level) < 0)
+    {
+        std::cout << "Failed to init logger!\n";
+    }
+}
+
 void WebServer::start(int port, int thread_nums, int timeout, int max_connection_num)
 {
+    logger_init("server.log", Level::DEBUG);
+
     _max_connection_num = max_connection_num;
     connections.resize(_max_connection_num);
 
@@ -108,6 +123,7 @@ void WebServer::start(int port, int thread_nums, int timeout, int max_connection
     close(timer_fd);
     close(listen_fd);
     close(epoll_fd);
+    logger.close();
 }
 
 void WebServer::close_connection(int fd)
@@ -150,7 +166,8 @@ void WebServer::handle_new_connection()
 
             timer.add(conn_fd);
 
-            std::cout << "new client connected! client fd: " << conn_fd << std::endl;
+            logger.log(Level::INFO,
+                       "New client connected! fd: " + std::to_string(conn_fd));
         }
         else if (conn_fd == -1)
         {
@@ -160,7 +177,7 @@ void WebServer::handle_new_connection()
             }
             else
             {
-                std::cout << "client connected error!" << std::endl;
+                logger.log(Level::ERROR, "Client connected error!");
                 break;
             }
         }
@@ -174,7 +191,7 @@ void WebServer::handle_threadpool_result()
     {
         if (errno != EAGAIN && errno != EWOULDBLOCK)
         {
-            std::cout << "Failed to get processed data!" << std::endl;
+            logger.log(Level::ERROR, "Failed to get processed data!");
             result_num = 0;
         }
     }
@@ -221,14 +238,17 @@ void WebServer::handle_threadpool_result()
             else
             {
                 close_connection(result_connection->fd());
-                std::cout << "close. client fd: " << result_connection->fd() << std::endl;
+                logger.log(Level::INFO,
+                           "Write done, close connection. fd: " + 
+                                std::to_string(result_connection->fd()));
             }
         }
         else if (result_connection->state() == ConnectionState::CLOSE)
         {
             close_connection(result_connection->fd());
-            std::cout << "Request error, close connection. fd: " << 
-                result_connection->fd() << std::endl;
+            logger.log(Level::ERROR,
+                       "Request error, close connection. fd: " + 
+                            std::to_string(result_connection->fd()));
         }
     }
 }
@@ -271,14 +291,16 @@ void WebServer::handle_write()
     else if (write_state == WriteState::WRITE_CLOSE)
     {
         close_connection(curr_event.data.fd);
-        std::cout << "Write done, close connection. fd:" << 
-            curr_event.data.fd << std::endl;
+        logger.log(Level::INFO,
+                   "Write done, close connection. fd: " +
+                       std::to_string(curr_event.data.fd));
     }
     else if (write_state == WriteState::WRITE_ERROR)
     {
         close_connection(curr_event.data.fd);
-        std::cout << "Write error, close connection. fd:"
-                  << curr_event.data.fd << std::endl;
+        logger.log(Level::ERROR,
+                   "Write error, close connection. fd: " +
+                       std::to_string(curr_event.data.fd));
     }
 }
 
@@ -301,8 +323,9 @@ void WebServer::handle_read()
         else if (read_bytes == 0)
         {
             close_connection(curr_event.data.fd);
-            std::cout << "Connection closed by peer. client fd: " << 
-                curr_event.data.fd << std::endl;
+            logger.log(Level::INFO,
+                       "Connection closed by peer. fd: " +
+                           std::to_string(curr_event.data.fd));
             break;
         }
         else if (read_bytes < 0)
@@ -316,14 +339,17 @@ void WebServer::handle_read()
             else if (errno == ECONNRESET)
             {
                 close_connection(curr_event.data.fd);
-                std::cout << "Connection closed by peer. client fd: " << 
-                    curr_event.data.fd << std::endl;
+                logger.log(Level::WARN,
+                           "Connection reset by peer. fd: " +
+                               std::to_string(curr_event.data.fd));
                 break;
             }
             else
             {
                 close_connection(curr_event.data.fd);
-                std::cout << "read error  client fd: " << curr_event.data.fd << std::endl;               
+                logger.log(Level::ERROR,
+                           "Read error. fd: " +
+                               std::to_string(curr_event.data.fd));
                 break;
             }
         }
