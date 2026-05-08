@@ -57,8 +57,8 @@ void ThreadPool::init(int threads_num, int event_fd)
                         if ((write(notify_fd, &one, sizeof(one))) == -1)
                         {
                             if (errno != EAGAIN && errno != EWOULDBLOCK)
-                            {    
-                                std::cout << "Failed to write on notify_fd!" << std::endl;
+                            {
+                                LOG_ERROR("Failed to write on notify_fd.");
                             }
                         }
                     } }));

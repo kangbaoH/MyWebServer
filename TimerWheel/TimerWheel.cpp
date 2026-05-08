@@ -57,7 +57,7 @@ void TimerWheel::tick(int epoll_fd)
         int next_fd = connections[fd].next_in_timerwheel;
         epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, nullptr);
         close(fd);
-        std::cout << "Timeout, connection close. fd: " << fd << std::endl;
+        LOG_WARN("Timeout, connection close. fd: " + std::to_string(fd));
         fd = next_fd;
     }
     wheel[current_slot] = -1;

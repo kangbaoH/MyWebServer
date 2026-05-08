@@ -32,7 +32,6 @@ private:
     int listen_fd;
     int notify_fd;
     int timer_fd;
-    Logger logger;
 
     epoll_event curr_event;
 

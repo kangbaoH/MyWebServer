@@ -19,7 +19,7 @@ void Connection::init(int client_fd)
     memset(current_dir, '\0', CURRENT_PATH_MAXLEN);
     if (getcwd(current_dir, CURRENT_PATH_MAXLEN) == nullptr)
     {
-        std::cout << "get current path failed.\n";
+        LOG_ERROR("get current path failed.");
     }
     else
     {
@@ -402,7 +402,7 @@ void Connection::reset_state()
     memset(current_dir, '\0', CURRENT_PATH_MAXLEN);
     if (getcwd(current_dir, CURRENT_PATH_MAXLEN) == nullptr)
     {
-        std::cout << "get current path failed.\n";
+        LOG_ERROR("get current path failed.");
     }
     else
     {

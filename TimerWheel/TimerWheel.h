@@ -4,6 +4,7 @@
 #include <sys/epoll.h>
 #include <iostream>
 #include "../Connection/Connection.h"
+#include "../Logger/Logger.h"
 
 class TimerWheel
 {

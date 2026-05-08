@@ -9,6 +9,7 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <sys/uio.h>
+#include "../Logger/Logger.h"
 
 enum class LineState
 {

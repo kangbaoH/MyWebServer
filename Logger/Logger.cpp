@@ -31,6 +31,24 @@ std::string Logger::level_to_str(Level level)
     }
 }
 
+std::string Logger::current_time()
+{
+    using namespace std::chrono;
+
+    auto now = system_clock::now();
+    auto ms = duration_cast<milliseconds>(now.time_since_epoch()) % 1000;
+
+    std::time_t t = system_clock::to_time_t(now);
+    std::tm tm_time;
+    localtime_r(&t, &tm_time);
+
+    std::ostringstream oss;
+    oss << std::put_time(&tm_time, "%Y-%m-%d %H:%M:%S") << "."
+        << std::setw(3) << std::setfill('0') << ms.count();
+
+    return oss.str();
+}
+
 int Logger::init(const std::string& filename, Level level)
 {
     file.open(filename, std::ios::app);
@@ -45,18 +63,30 @@ int Logger::init(const std::string& filename, Level level)
     return 0;
 }
 
-void Logger::log(Level level, const std::string &msg)
+void Logger::log(Level level, const std::string &filename, int line,
+                 const std::string &msg)
 {
     if (level < log_level)
     {
         return;
     }
 
-    file << level_to_str(level) << " " << msg << "\n";
-    file.flush();
+    {
+        std::unique_lock<std::mutex> lock(_mutex);
+        file << "[" << current_time() << "] ";
+        file << "[" << filename << ":" << line << "] ";
+        file << level_to_str(level) << " " << msg << "\n";
+        file.flush();
+    }
 }
 
-void Logger::close()
+Logger& Logger::instance()
+{
+    static Logger logger;
+    return logger;
+}
+
+Logger::~Logger()
 {
     file.close();
 }

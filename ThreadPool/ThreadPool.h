@@ -6,10 +6,11 @@
 #include <condition_variable>
 #include <queue>
 #include <vector>
+#include <iostream>
 #include <sys/eventfd.h>
 #include <unistd.h>
-#include <iostream>
 #include "../Connection/Connection.h"
+#include "../Logger/Logger.h"
 
 struct Task
 {
