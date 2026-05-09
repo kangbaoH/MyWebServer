@@ -45,6 +45,10 @@ void TimerWheel::remove(int fd)
         connections[connections[fd].next_in_timerwheel].prev_in_timerwheel =
             connections[fd].prev_in_timerwheel;
     }
+
+    connections[fd].prev_in_timerwheel = -1;
+    connections[fd].position_in_timerwheel = -1;
+    connections[fd].next_in_timerwheel = -1;
 }
 
 void TimerWheel::tick(int epoll_fd)
@@ -58,6 +62,11 @@ void TimerWheel::tick(int epoll_fd)
         epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, nullptr);
         close(fd);
         LOG_WARN("Timeout, connection close. fd: " + std::to_string(fd));
+
+        connections[fd].prev_in_timerwheel = -1;
+        connections[fd].position_in_timerwheel = -1;
+        connections[fd].next_in_timerwheel = -1;
+
         fd = next_fd;
     }
     wheel[current_slot] = -1;
