@@ -51,7 +51,7 @@ void WebServer::listen_init(int port)
     listen_event.events = EPOLLIN | EPOLLET;
     epoll_ctl(epoll_fd, EPOLL_CTL_ADD, listen_fd, &listen_event);
 
-    LOG_INFO("Server is listening on Port 8080.");
+    LOG_INFO("Server is listening on Port " + std::to_string(port) + ".");
 }
 
 void WebServer::threadpool_init(int thread_nums)
@@ -99,22 +99,22 @@ void WebServer::logger_init(std::string dir, Level level,size_t file_size)
     }
 }
 
-void WebServer::start(int port, int thread_nums, int timeout, int max_connection_num)
+void WebServer::start(Config config, std::atomic<bool> &stop)
 {
-    logger_init("Logs", Level::DEBUG, 10 * 1024 * 1024);
+    logger_init(config.log_dir, config.log_level, config.log_size);
 
-    _max_connection_num = max_connection_num;
+    _max_connection_num = config.max_conn;
     connections.resize(_max_connection_num);
 
     epoll_init();
-    listen_init(port);
-    timer_init(timeout);
-    threadpool_init(thread_nums);
+    listen_init(config.port);
+    timer_init(config.timeout);
+    threadpool_init(config.thread_nums);
 
     std::vector<epoll_event> events(MAX_EVENT_NUM);
-    for (;;)
+    while (!stop)
     {
-        int request_num = epoll_wait(epoll_fd, events.data(), MAX_EVENT_NUM, -1);
+        int request_num = epoll_wait(epoll_fd, events.data(), MAX_EVENT_NUM, 1000);
 
         for (int i = 0; i < request_num; i += 1)
         {
@@ -143,10 +143,15 @@ void WebServer::start(int port, int thread_nums, int timeout, int max_connection
         }
     }
 
+    LOG_INFO("Server stopping.");
+
+    for (auto conn : connections)
+    {
+        close(conn.fd());
+    }
     close(timer_fd);
     close(listen_fd);
     close(epoll_fd);
-    Logger::instance().close();
 }
 
 void WebServer::close_connection(int fd)

@@ -145,16 +145,11 @@ Logger& Logger::instance()
     return logger;
 }
 
-void Logger::close()
+Logger::~Logger()
 {
     stop = true;
     condition.notify_all();
     worker.join();
     file.flush();
     file.close();
-}
-
-Logger::~Logger()
-{
-    close();
 }

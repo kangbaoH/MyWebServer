@@ -1,4 +1,4 @@
-server:	main.cpp ./Connection/Connection.cpp ./ThreadPool/ThreadPool.cpp ./TimerWheel/TimerWheel.cpp ./WebServer/WebServer.cpp ./Logger/Logger.cpp
+server:	main.cpp ./Connection/Connection.cpp ./ThreadPool/ThreadPool.cpp ./TimerWheel/TimerWheel.cpp ./WebServer/WebServer.cpp ./Logger/Logger.cpp ./Config/Config.cpp
 		g++ -std=c++14 -O2 -g -pthread \
 		main.cpp                       \
 		./Connection/Connection.cpp    \
@@ -6,6 +6,7 @@ server:	main.cpp ./Connection/Connection.cpp ./ThreadPool/ThreadPool.cpp ./Timer
 		./TimerWheel/TimerWheel.cpp    \
 		./WebServer/WebServer.cpp      \
 		./Logger/Logger.cpp            \
+		./Config/Config.cpp            \
 		-o server
 
 clean:

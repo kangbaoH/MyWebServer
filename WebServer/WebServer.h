@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <vector>
+#include <atomic>
 #include <string.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -14,6 +15,7 @@
 #include "../Connection/Connection.h"
 #include "../TimerWheel/TimerWheel.h"
 #include "../Logger/Logger.h"
+#include "../Config/Config.h"
 
 #define MAX_EVENT_NUM 1024
 #define MAX_CWD_LEN 200
@@ -42,7 +44,7 @@ public:
     void timer_init(int timeout);
     void logger_init(std::string dir, Level level, size_t file_size);
 
-    void start(int port, int thread_nums, int timeout, int max_connection_num);
+    void start(Config config, std::atomic<bool> &stop);
 
     void close_connection(int fd);
 

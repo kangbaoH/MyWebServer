@@ -50,8 +50,6 @@ public:
              const std::string &msg);
     static Logger &instance();
 
-    void close();
-
     ~Logger();
 
 private:
